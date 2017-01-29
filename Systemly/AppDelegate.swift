@@ -7,16 +7,105 @@
 //
 
 import UIKit
+import Firebase
+import FirebaseAuthUI
+import GoogleSignIn
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, GIDSignInDelegate {
 
     var window: UIWindow?
+    var databaseRef: FIRDatabaseReference!
 
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
+        
         // Override point for customization after application launch.
+        
+        FIRApp.configure()
+        
+        GIDSignIn.sharedInstance().clientID = FIRApp.defaultApp()?.options.clientID
+        GIDSignIn.sharedInstance().delegate = self
+        
+        @available(iOS 9.0, *)
+        func application(_ application: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any])
+            -> Bool {
+                return GIDSignIn.sharedInstance().handle(url,
+                                                            sourceApplication:options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
+                                                            annotation: [:])
+        }
+        
         return true
+        
+    }
+    
+    func application(_ application: UIApplication, open url: URL, sourceApplication: String?, annotation: Any) -> Bool {
+        return GIDSignIn.sharedInstance().handle(url,
+                                                    sourceApplication: sourceApplication,
+                                                    annotation: annotation)
+        
+    }
+    
+    func sign(_ signIn: GIDSignIn!, didSignInFor user: GIDGoogleUser!, withError error: Error?) {
+        // ...
+        if let error = error {
+            // ...
+            print(error)
+            return
+        }
+        
+        print("User signed in google")
+        
+        guard let authentication = user.authentication else { return }
+        let credential = FIRGoogleAuthProvider.credential(withIDToken:     authentication.idToken,
+                                                          accessToken: authentication.accessToken)
+        // ...
+        
+        FIRAuth.auth()?.signIn(with: credential) { (user, error) in
+            // ...
+            print("test")
+            if let error = error {
+                // ...
+                print(error)
+                return
+            }
+            
+            print("Signed In FireBase \(user!)")
+            
+            self.databaseRef = FIRDatabase.database().reference()
+            let childRef = FIRDatabase.database().reference(withPath: "user_profiles")
+            
+            self.databaseRef.child("user_profiles").child(user!.uid).observeSingleEvent(of: .value, with: { (snapshot) in
+                let snapshot = snapshot.value as? NSDictionary
+                if(snapshot == nil){
+                    self.databaseRef.child("user_profiles").child(user!.uid).child("name").setValue(user?.displayName)
+                    self.databaseRef.child("user_profiles").child(user!.uid).child("email").setValue(user?.email)
+                }
+                else {
+                    
+                    childRef.child(user!.uid).child("name").observe(.value, with: { snapshot in
+                        
+                            print(snapshot.value)
+                        
+                    })
+                    
+                    //let mainStoryboard: UIStoryboard = UIStoryboard(name: "Main", bundle: nil)
+                    
+                    //self.window?.rootViewController?.performSegue(withIdentifier: "HomeViewSegue", sender: nil)
+                    
+                }
+            })
+        }
+    }
+    
+    func signIn(signIn: GIDSignIn!, didDisconnectWithUser user:GIDGoogleUser!,
+                withError error: NSError!) {
+        // Perform any operations when the user disconnects from app here.
+        // ...
+        
+        print("user has signed out")
+    }
+    
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -42,5 +131,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 
-}
+
 
